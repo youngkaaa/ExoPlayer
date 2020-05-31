@@ -62,7 +62,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
   private final Timeline.Period period;
   private final ArrayDeque<Runnable> pendingListenerNotifications;
 
-  private MediaSource mediaSource;
+  private MediaSource mediaSource; // 当前prepare播放的MediaSource实例
   private boolean playWhenReady;
   @PlaybackSuppressionReason private int playbackSuppressionReason;
   @RepeatMode private int repeatMode;

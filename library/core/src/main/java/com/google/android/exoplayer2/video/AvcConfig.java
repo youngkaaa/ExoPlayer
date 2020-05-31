@@ -45,16 +45,19 @@ public final class AvcConfig {
    */
   public static AvcConfig parse(ParsableByteArray data) throws ParserException {
     try {
+      // version(1)+AVCProfileIndication(1)+profile_compatibility(1)+AVCLevelIndication(1)
       data.skipBytes(4); // Skip to the AVCDecoderConfigurationRecord (defined in 14496-15)
       int nalUnitLengthFieldLength = (data.readUnsignedByte() & 0x3) + 1;
       if (nalUnitLengthFieldLength == 3) {
         throw new IllegalStateException();
       }
       List<byte[]> initializationData = new ArrayList<>();
+      // SPS个数，低五位有效
       int numSequenceParameterSets = data.readUnsignedByte() & 0x1F;
       for (int j = 0; j < numSequenceParameterSets; j++) {
         initializationData.add(buildNalUnitForChild(data));
       }
+      // PPS个数
       int numPictureParameterSets = data.readUnsignedByte();
       for (int j = 0; j < numPictureParameterSets; j++) {
         initializationData.add(buildNalUnitForChild(data));
@@ -88,9 +91,9 @@ public final class AvcConfig {
   }
 
   private static byte[] buildNalUnitForChild(ParsableByteArray data) {
-    int length = data.readUnsignedShort();
+    int length = data.readUnsignedShort(); // SPS/PPS长度
     int offset = data.getPosition();
-    data.skipBytes(length);
+    data.skipBytes(length); // 先跳过SPS/PPS内容。然后通过下面方法处理其内容
     return CodecSpecificDataUtil.buildNalUnit(data.data, offset, length);
   }
 

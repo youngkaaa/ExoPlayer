@@ -61,13 +61,15 @@ import java.util.HashMap;
 import java.util.Map;
 import org.checkerframework.checker.nullness.compatqual.NullableType;
 
-/** A {@link MediaPeriod} that extracts data using an {@link Extractor}. */
+/**
+ * A {@link MediaPeriod} that extracts data using an {@link Extractor}.
+ */
 /* package */ final class ProgressiveMediaPeriod
     implements MediaPeriod,
-        ExtractorOutput,
-        Loader.Callback<ProgressiveMediaPeriod.ExtractingLoadable>,
-        Loader.ReleaseCallback,
-        UpstreamFormatChangedListener {
+    ExtractorOutput,
+    Loader.Callback<ProgressiveMediaPeriod.ExtractingLoadable>,
+    Loader.ReleaseCallback,
+    UpstreamFormatChangedListener {
 
   /**
    * Listener for information about the period.
@@ -80,7 +82,7 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
      *
      * @param durationUs The duration of the period, or {@link C#TIME_UNSET}.
      * @param isSeekable Whether the period is seekable.
-     * @param isLive Whether the period is live.
+     * @param isLive     Whether the period is live.
      */
     void onSourceInfoRefreshed(long durationUs, boolean isSeekable, boolean isLive);
   }
@@ -103,7 +105,8 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
   private final EventDispatcher eventDispatcher;
   private final Listener listener;
   private final Allocator allocator;
-  @Nullable private final String customCacheKey;
+  @Nullable
+  private final String customCacheKey;
   private final long continueLoadingCheckIntervalBytes;
   private final Loader loader;
   private final ExtractorHolder extractorHolder;
@@ -112,15 +115,19 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
   private final Runnable onContinueLoadingRequestedRunnable;
   private final Handler handler;
 
-  @Nullable private Callback callback;
-  @Nullable private SeekMap seekMap;
-  @Nullable private IcyHeaders icyHeaders;
+  @Nullable
+  private Callback callback;
+  @Nullable
+  private SeekMap seekMap;
+  @Nullable
+  private IcyHeaders icyHeaders;
   private SampleQueue[] sampleQueues;
   private TrackId[] sampleQueueTrackIds;
   private boolean sampleQueuesBuilt;
   private boolean prepared;
 
-  @Nullable private PreparedState preparedState;
+  @Nullable
+  private PreparedState preparedState;
   private boolean haveAudioVideoTracks;
   private int dataType;
 
@@ -141,22 +148,24 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
   private boolean released;
 
   /**
-   * @param uri The {@link Uri} of the media stream.
-   * @param dataSource The data source to read the media.
-   * @param extractors The extractors to use to read the data source.
-   * @param loadErrorHandlingPolicy The {@link LoadErrorHandlingPolicy}.
-   * @param eventDispatcher A dispatcher to notify of events.
-   * @param listener A listener to notify when information about the period changes.
-   * @param allocator An {@link Allocator} from which to obtain media buffer allocations.
-   * @param customCacheKey A custom key that uniquely identifies the original stream. Used for cache
-   *     indexing. May be null.
+   * @param uri                               The {@link Uri} of the media stream.
+   * @param dataSource                        The data source to read the media.
+   * @param extractors                        The extractors to use to read the data source.
+   * @param loadErrorHandlingPolicy           The {@link LoadErrorHandlingPolicy}.
+   * @param eventDispatcher                   A dispatcher to notify of events.
+   * @param listener                          A listener to notify when information about the period
+   *                                          changes.
+   * @param allocator                         An {@link Allocator} from which to obtain media buffer
+   *                                          allocations.
+   * @param customCacheKey                    A custom key that uniquely identifies the original
+   *                                          stream. Used for cache indexing. May be null.
    * @param continueLoadingCheckIntervalBytes The number of bytes that should be loaded between each
-   *     invocation of {@link Callback#onContinueLoadingRequested(SequenceableLoader)}.
+   *                                          invocation of {@link Callback#onContinueLoadingRequested(SequenceableLoader)}.
    */
   // maybeFinishPrepare is not posted to the handler until initialization completes.
   @SuppressWarnings({
-    "nullness:argument.type.incompatible",
-    "nullness:methodref.receiver.bound.invalid"
+      "nullness:argument.type.incompatible",
+      "nullness:methodref.receiver.bound.invalid"
   })
   public ProgressiveMediaPeriod(
       Uri uri,
@@ -691,6 +700,9 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
     return trackOutput;
   }
 
+  /**
+   * Mediasource 准备完毕时调用
+   */
   private void maybeFinishPrepare() {
     SeekMap seekMap = this.seekMap;
     if (released || prepared || !sampleQueuesBuilt || seekMap == null) {
@@ -731,13 +743,13 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
       }
       trackArray[i] = new TrackGroup(trackFormat);
     }
-    isLive = length == C.LENGTH_UNSET && seekMap.getDurationUs() == C.TIME_UNSET;
+    isLive = length == C.LENGTH_UNSET && seekMap.getDurationUs() == C.TIME_UNSET; // 是否是实时流
     dataType = isLive ? C.DATA_TYPE_MEDIA_PROGRESSIVE_LIVE : C.DATA_TYPE_MEDIA;
     preparedState =
         new PreparedState(seekMap, new TrackGroupArray(trackArray), trackIsAudioVideoFlags);
     prepared = true;
     listener.onSourceInfoRefreshed(durationUs, seekMap.isSeekable(), isLive);
-    Assertions.checkNotNull(callback).onPrepared(this);
+    Assertions.checkNotNull(callback).onPrepared(this); // 回调出去，表示prepare完成
   }
 
   private PreparedState getPreparedState() {
@@ -785,11 +797,11 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
   /**
    * Called to configure a retry when a load error occurs.
    *
-   * @param loadable The current loadable for which the error was encountered.
+   * @param loadable                    The current loadable for which the error was encountered.
    * @param currentExtractedSampleCount The current number of samples that have been extracted into
-   *     the sample queues.
+   *                                    the sample queues.
    * @return Whether the loader should retry with the current loadable. False indicates a deferred
-   *     retry.
+   * retry.
    */
   private boolean configureRetry(ExtractingLoadable loadable, int currentExtractedSampleCount) {
     if (length != C.LENGTH_UNSET
@@ -830,7 +842,7 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
    * Attempts to seek to the specified position within the sample queues.
    *
    * @param trackIsAudioVideoFlags Whether each track is audio/video.
-   * @param positionUs The seek position in microseconds.
+   * @param positionUs             The seek position in microseconds.
    * @return Whether the in-buffer seek was successful.
    */
   private boolean seekInsideBufferUs(boolean[] trackIsAudioVideoFlags, long positionUs) {
@@ -901,7 +913,9 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
 
   }
 
-  /** Loads the media stream and extracts sample data from it. */
+  /**
+   * Loads the media stream and extracts sample data from it.
+   */
   /* package */ final class ExtractingLoadable implements Loadable, IcyDataSource.Listener {
 
     private final Uri uri;
@@ -917,7 +931,8 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
     private long seekTimeUs;
     private DataSpec dataSpec;
     private long length;
-    @Nullable private TrackOutput icyTrackOutput;
+    @Nullable
+    private TrackOutput icyTrackOutput;
     private boolean seenIcyMetadata;
 
     @SuppressWarnings("method.invocation.invalid")
@@ -948,12 +963,16 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
     @Override
     public void load() throws IOException, InterruptedException {
       int result = Extractor.RESULT_CONTINUE;
+      // RESULT_CONTINUE表示继续读取
       while (result == Extractor.RESULT_CONTINUE && !loadCanceled) {
         ExtractorInput input = null;
         try {
+          // 拿到上一次需要seek时保存的最终seek位置
           long position = positionHolder.position;
           dataSpec = buildDataSpec(position);
+          // http请求拿到content-length
           length = dataSource.open(dataSpec);
+          // 之前的长度(position)+本次请求返回的长度(length)
           if (length != C.LENGTH_UNSET) {
             length += position;
           }
@@ -979,6 +998,7 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
           }
           while (result == Extractor.RESULT_CONTINUE && !loadCanceled) {
             loadCondition.block();
+            // 可能返回RESULT_SEEK，此时终止内层循环，重新走外层的循环来重新请求，以实现seek，seek的位置在positionHolder.postion中保存
             result = extractor.read(input, positionHolder);
             if (input.getPosition() > position + continueLoadingCheckIntervalBytes) {
               position = input.getPosition();
@@ -987,11 +1007,13 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
             }
           }
         } finally {
+          // read时遇到了比较长的一段无用数据，此时extractor.read返回RESULT_SEEK，会重新http请求，跳过该段数据
           if (result == Extractor.RESULT_SEEK) {
             result = Extractor.RESULT_CONTINUE;
           } else if (input != null) {
             positionHolder.position = input.getPosition();
           }
+          // 开始下一次请求时，把上一个请求关掉
           Util.closeQuietly(dataSource);
         }
       }
@@ -1035,12 +1057,15 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
     }
   }
 
-  /** Stores a list of extractors and a selected extractor when the format has been detected. */
+  /**
+   * Stores a list of extractors and a selected extractor when the format has been detected.
+   */
   private static final class ExtractorHolder {
 
     private final Extractor[] extractors;
 
-    @Nullable private Extractor extractor;
+    @Nullable
+    private Extractor extractor;
 
     /**
      * Creates a holder that will select an extractor and initialize it using the specified output.
@@ -1055,14 +1080,14 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
      * Returns an initialized extractor for reading {@code input}, and returns the same extractor on
      * later calls.
      *
-     * @param input The {@link ExtractorInput} from which data should be read.
+     * @param input  The {@link ExtractorInput} from which data should be read.
      * @param output The {@link ExtractorOutput} that will be used to initialize the selected
-     *     extractor.
-     * @param uri The {@link Uri} of the data.
+     *               extractor.
+     * @param uri    The {@link Uri} of the data.
      * @return An initialized extractor for reading {@code input}.
      * @throws UnrecognizedInputFormatException Thrown if the input format could not be detected.
-     * @throws IOException Thrown if the input could not be read.
-     * @throws InterruptedException Thrown if the thread was interrupted.
+     * @throws IOException                      Thrown if the input could not be read.
+     * @throws InterruptedException             Thrown if the thread was interrupted.
      */
     public Extractor selectExtractor(ExtractorInput input, ExtractorOutput output, Uri uri)
         throws IOException, InterruptedException {
@@ -1104,7 +1129,9 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
     }
   }
 
-  /** Stores state that is initialized when preparation completes. */
+  /**
+   * Stores state that is initialized when preparation completes.
+   */
   private static final class PreparedState {
 
     public final SeekMap seekMap;
@@ -1123,7 +1150,9 @@ import org.checkerframework.checker.nullness.compatqual.NullableType;
     }
   }
 
-  /** Identifies a track. */
+  /**
+   * Identifies a track.
+   */
   private static final class TrackId {
 
     public final int id;

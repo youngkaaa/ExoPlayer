@@ -46,14 +46,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Implements the internal behavior of {@link ExoPlayerImpl}. */
+/**
+ * Implements the internal behavior of {@link ExoPlayerImpl}.
+ */
 /* package */ final class ExoPlayerImplInternal
     implements Handler.Callback,
-        MediaPeriod.Callback,
-        TrackSelector.InvalidationListener,
-        MediaSourceCaller,
-        PlaybackParameterListener,
-        PlayerMessage.Sender {
+    MediaPeriod.Callback,
+    TrackSelector.InvalidationListener,
+    MediaSourceCaller,
+    PlaybackParameterListener,
+    PlayerMessage.Sender {
 
   private static final String TAG = "ExoPlayerImplInternal";
 
@@ -107,13 +109,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
   private SeekParameters seekParameters;
 
   private PlaybackInfo playbackInfo;
-  private MediaSource mediaSource;
+  private MediaSource mediaSource; // 当前prepare播放的MediaSource实例
   private Renderer[] enabledRenderers;
   private boolean released;
   private boolean playWhenReady;
   private boolean rebuffering;
   private boolean shouldContinueLoading;
-  @Player.RepeatMode private int repeatMode;
+  @Player.RepeatMode
+  private int repeatMode;
   private boolean shuffleModeEnabled;
   private boolean foregroundMode;
 
@@ -309,6 +312,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
   @Override
   public boolean handleMessage(Message msg) {
     try {
+      Log.d(TAG, "msg.what:" + msg.what);
       switch (msg.what) {
         case MSG_PREPARE:
           prepareInternal(
@@ -347,7 +351,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
               /* resetPositionAndState= */ msg.arg1 != 0,
               /* acknowledgeStop= */ true);
           break;
-        case MSG_PERIOD_PREPARED:
+        case MSG_PERIOD_PREPARED: // mediasource 读取header等信息完毕后，回调出来。准备结束
           handlePeriodPrepared((MediaPeriod) msg.obj);
           break;
         case MSG_REFRESH_SOURCE_INFO:
@@ -425,6 +429,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
         + RendererCapabilities.getFormatSupportString(e.rendererFormatSupport);
   }
 
+  /**
+   * 设置更新当前播放状态
+   * @param state 新的播放状态
+   */
   private void setState(int state) {
     if (playbackInfo.playbackState != state) {
       playbackInfo = playbackInfo.copyWithPlaybackState(state);
@@ -456,7 +464,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
         /* resetError= */ true);
     loadControl.onPrepared();
     this.mediaSource = mediaSource;
-    setState(Player.STATE_BUFFERING);
+    setState(Player.STATE_BUFFERING); // 更新成缓冲状态
     mediaSource.prepareSource(/* caller= */ this, bandwidthMeter.getTransferListener());
     handler.sendEmptyMessage(MSG_DO_SOME_WORK);
   }
@@ -623,7 +631,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
     if (renderersEnded
         && playingPeriodHolder.prepared
         && (playingPeriodDurationUs == C.TIME_UNSET
-            || playingPeriodDurationUs <= playbackInfo.positionUs)
+        || playingPeriodDurationUs <= playbackInfo.positionUs)
         && playingPeriodHolder.info.isFinal) {
       setState(Player.STATE_ENDED);
       stopRenderers();
@@ -768,7 +776,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
     if (forceDisableRenderers
         || oldPlayingPeriodHolder != newPlayingPeriodHolder
         || (newPlayingPeriodHolder != null
-            && newPlayingPeriodHolder.toRendererTime(periodPositionUs) < 0)) {
+        && newPlayingPeriodHolder.toRendererTime(periodPositionUs) < 0)) {
       for (Renderer renderer : enabledRenderers) {
         disableRenderer(renderer);
       }
@@ -1081,8 +1089,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
         nextPendingMessageIndex > 0 ? pendingMessages.get(nextPendingMessageIndex - 1) : null;
     while (previousInfo != null
         && (previousInfo.resolvedPeriodIndex > currentPeriodIndex
-            || (previousInfo.resolvedPeriodIndex == currentPeriodIndex
-                && previousInfo.resolvedPeriodTimeUs > oldPeriodPositionUs))) {
+        || (previousInfo.resolvedPeriodIndex == currentPeriodIndex
+        && previousInfo.resolvedPeriodTimeUs > oldPeriodPositionUs))) {
       nextPendingMessageIndex--;
       previousInfo =
           nextPendingMessageIndex > 0 ? pendingMessages.get(nextPendingMessageIndex - 1) : null;
@@ -1094,8 +1102,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
     while (nextInfo != null
         && nextInfo.resolvedPeriodUid != null
         && (nextInfo.resolvedPeriodIndex < currentPeriodIndex
-            || (nextInfo.resolvedPeriodIndex == currentPeriodIndex
-                && nextInfo.resolvedPeriodTimeUs <= oldPeriodPositionUs))) {
+        || (nextInfo.resolvedPeriodIndex == currentPeriodIndex
+        && nextInfo.resolvedPeriodTimeUs <= oldPeriodPositionUs))) {
       nextPendingMessageIndex++;
       nextInfo =
           nextPendingMessageIndex < pendingMessages.size()
@@ -1263,7 +1271,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
     boolean bufferedToEnd = loadingHolder.isFullyBuffered() && loadingHolder.info.isFinal;
     return bufferedToEnd
         || loadControl.shouldStartPlayback(
-            getTotalBufferedDurationUs(), mediaClock.getPlaybackParameters().speed, rebuffering);
+        getTotalBufferedDurationUs(), mediaClock.getPlaybackParameters().speed, rebuffering);
   }
 
   private boolean isTimelineReady() {
@@ -1271,7 +1279,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
     long playingPeriodDurationUs = playingPeriodHolder.info.durationUs;
     return playingPeriodHolder.prepared
         && (playingPeriodDurationUs == C.TIME_UNSET
-            || playbackInfo.positionUs < playingPeriodDurationUs);
+        || playbackInfo.positionUs < playingPeriodDurationUs);
   }
 
   private void maybeThrowSourceInfoRefreshError() throws IOException {
@@ -1424,12 +1432,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
    * in a new timeline. The uid of this period in the new timeline is returned.
    *
    * @param oldPeriodUid The index of the period in the old timeline.
-   * @param oldTimeline The old timeline.
-   * @param newTimeline The new timeline.
+   * @param oldTimeline  The old timeline.
+   * @param newTimeline  The new timeline.
    * @return The uid in the new timeline of the first subsequent period, or null if no such period
-   *     was found.
+   * was found.
    */
-  private @Nullable Object resolveSubsequentPeriod(
+  private @Nullable
+  Object resolveSubsequentPeriod(
       Object oldPeriodUid, Timeline oldTimeline, Timeline newTimeline) {
     int oldPeriodIndex = oldTimeline.getIndexOfPeriod(oldPeriodUid);
     int newPeriodIndex = C.INDEX_UNSET;
@@ -1451,12 +1460,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
    * Converts a {@link SeekPosition} into the corresponding (periodUid, periodPositionUs) for the
    * internal timeline.
    *
-   * @param seekPosition The position to resolve.
+   * @param seekPosition         The position to resolve.
    * @param trySubsequentPeriods Whether the position can be resolved to a subsequent matching
-   *     period if the original period is no longer available.
+   *                             period if the original period is no longer available.
    * @return The resolved position, or null if resolution was not successful.
    * @throws IllegalSeekPositionException If the window index of the seek position is outside the
-   *     bounds of the timeline.
+   *                                      bounds of the timeline.
    */
   @Nullable
   private Pair<Object, Long> resolveSeekPosition(
@@ -1530,8 +1539,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
     maybeUpdatePlayingPeriod();
   }
 
+  /**
+   * 更新处理loading 对应的Period，即判断是否需要继续loading
+   */
   private void maybeUpdateLoadingPeriod() throws ExoPlaybackException, IOException {
     queue.reevaluateBuffer(rendererPositionUs);
+    // 是否可以开始下一个loading了
     if (queue.shouldLoadNextMediaPeriod()) {
       MediaPeriodInfo info = queue.getNextMediaPeriodInfo(rendererPositionUs, playbackInfo);
       if (info == null) {
@@ -1712,6 +1725,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
     }
   }
 
+  /**
+   * MediaSource header读取成功，准备完毕
+   * @param mediaPeriod
+   * @throws ExoPlaybackException
+   */
   private void handlePeriodPrepared(MediaPeriod mediaPeriod) throws ExoPlaybackException {
     if (!queue.isLoading(mediaPeriod)) {
       // Stale event.
@@ -1817,8 +1835,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
       }
       if (rendererWasEnabledFlags[i]
           && (!newPlayingPeriodHolder.getTrackSelectorResult().isRendererEnabled(i)
-              || (renderer.isCurrentStreamFinal()
-                  && renderer.getStream() == oldPlayingPeriodHolder.sampleStreams[i]))) {
+          || (renderer.isCurrentStreamFinal()
+          && renderer.getStream() == oldPlayingPeriodHolder.sampleStreams[i]))) {
         // The renderer should be disabled before playing the next period, either because it's not
         // needed to play the next period, or because we need to re-enable it as its current stream
         // is final and it's not reading ahead.
@@ -1966,7 +1984,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
     public int resolvedPeriodIndex;
     public long resolvedPeriodTimeUs;
-    @Nullable public Object resolvedPeriodUid;
+    @Nullable
+    public Object resolvedPeriodUid;
 
     public PendingMessageInfo(PlayerMessage message) {
       this.message = message;
@@ -2013,7 +2032,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
     private PlaybackInfo lastPlaybackInfo;
     private int operationAcks;
     private boolean positionDiscontinuity;
-    private @DiscontinuityReason int discontinuityReason;
+    private @DiscontinuityReason
+    int discontinuityReason;
 
     public boolean hasPendingUpdate(PlaybackInfo playbackInfo) {
       return playbackInfo != lastPlaybackInfo || operationAcks > 0 || positionDiscontinuity;

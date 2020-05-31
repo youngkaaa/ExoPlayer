@@ -69,11 +69,11 @@ public final class DefaultExtractorInput implements ExtractorInput {
   @Override
   public boolean readFully(byte[] target, int offset, int length, boolean allowEndOfInput)
       throws IOException, InterruptedException {
-    int bytesRead = readFromPeekBuffer(target, offset, length);
-    while (bytesRead < length && bytesRead != C.RESULT_END_OF_INPUT) {
+    int bytesRead = readFromPeekBuffer(target, offset, length); // 从预读取的peekBuffer中读取
+    while (bytesRead < length && bytesRead != C.RESULT_END_OF_INPUT) { // 如果peekBuffer中没有读取出想要的length长度 那么直接从inputStream中读取
       bytesRead = readFromDataSource(target, offset, length, bytesRead, allowEndOfInput);
     }
-    commitBytesRead(bytesRead);
+    commitBytesRead(bytesRead); // 将当前position后移bytesRead
     return bytesRead != C.RESULT_END_OF_INPUT;
   }
 
@@ -239,9 +239,9 @@ public final class DefaultExtractorInput implements ExtractorInput {
     if (peekBufferLength == 0) {
       return 0;
     }
-    int peekBytes = Math.min(peekBufferLength, length);
-    System.arraycopy(peekBuffer, 0, target, offset, peekBytes);
-    updatePeekBuffer(peekBytes);
+    int peekBytes = Math.min(peekBufferLength, length); // peekBuffer中还剩余的长度
+    System.arraycopy(peekBuffer, 0, target, offset, peekBytes);  // 将剩余长度复制到target中
+    updatePeekBuffer(peekBytes); // 更新peekBufferLength以及peekBuffer（扔掉peekBuffer中前peekBytes个已使用过的字节）
     return peekBytes;
   }
 
@@ -251,14 +251,14 @@ public final class DefaultExtractorInput implements ExtractorInput {
    * @param bytesConsumed The number of bytes consumed from the peek buffer.
    */
   private void updatePeekBuffer(int bytesConsumed) {
-    peekBufferLength -= bytesConsumed;
+    peekBufferLength -= bytesConsumed; // 总buffer长度减去本次已读取掉的字节数。
     peekBufferPosition = 0;
     byte[] newPeekBuffer = peekBuffer;
     if (peekBufferLength < peekBuffer.length - PEEK_MAX_FREE_SPACE) {
       newPeekBuffer = new byte[peekBufferLength + PEEK_MIN_FREE_SPACE_AFTER_RESIZE];
     }
-    System.arraycopy(peekBuffer, bytesConsumed, newPeekBuffer, 0, peekBufferLength);
-    peekBuffer = newPeekBuffer;
+    System.arraycopy(peekBuffer, bytesConsumed, newPeekBuffer, 0, peekBufferLength); // 将peekBuffer中前面消耗掉的bytesConsumed字节跳过
+    peekBuffer = newPeekBuffer; // peekBuffer完成修改
   }
 
   /**
@@ -296,7 +296,7 @@ public final class DefaultExtractorInput implements ExtractorInput {
 
   /**
    * Advances the position by the specified number of bytes read.
-   *
+   * 将position往后挪动bytesRead。表示当前已读取的字节数
    * @param bytesRead The number of bytes read.
    */
   private void commitBytesRead(int bytesRead) {

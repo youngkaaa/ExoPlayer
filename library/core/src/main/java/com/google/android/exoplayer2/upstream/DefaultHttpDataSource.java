@@ -294,7 +294,7 @@ public class DefaultHttpDataSource extends BaseDataSource implements HttpDataSou
     }
 
     // Check for a valid response code.
-    if (responseCode < 200 || responseCode > 299) {
+    if (responseCode < 200 || responseCode > 299) { // 请求失败
       Map<String, List<String>> headers = connection.getHeaderFields();
       closeConnectionQuietly();
       InvalidResponseCodeException exception =

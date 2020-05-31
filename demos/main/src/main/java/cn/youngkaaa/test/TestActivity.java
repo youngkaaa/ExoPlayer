@@ -1,18 +1,15 @@
 package cn.youngkaaa.test;
 
 import android.net.Uri;
-import android.os.Environment;
-import android.os.Handler;
-import android.os.Looper;
-import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
+import android.view.View;
+import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.demo.R;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.ProgressiveMediaSource;
 import com.google.android.exoplayer2.ui.PlayerView;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
-import java.io.File;
 
 public class TestActivity extends AppCompatActivity {
 
@@ -20,7 +17,6 @@ public class TestActivity extends AppCompatActivity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_test);
-
 
     PlayerView playerView = findViewById(R.id.player_view);
 
@@ -35,8 +31,15 @@ public class TestActivity extends AppCompatActivity {
     MediaSource mediaSource = new ProgressiveMediaSource.Factory(dataSourceFactory)
         .createMediaSource(uri);
 
-    playerView.setPlayer(player);
-    player.setPlayWhenReady(true);
-    player.prepare(mediaSource);
+    findViewById(R.id.btn_start).setOnClickListener(new View.OnClickListener() {
+      @Override
+      public void onClick(View v) {
+        playerView.setPlayer(player);
+        player.setPlayWhenReady(true);
+        player.prepare(mediaSource);
+      }
+    });
+
+
   }
 }

@@ -146,7 +146,7 @@ public abstract class BaseMediaSource implements MediaSource {
     Looper looper = Looper.myLooper();
     Assertions.checkArgument(this.looper == null || this.looper == looper);
     Timeline timeline = this.timeline;
-    mediaSourceCallers.add(caller);
+    mediaSourceCallers.add(caller); // mediaSourceCallers里面是所有的caller都加进去的
     if (this.looper == null) {
       this.looper = looper;
       enabledMediaSourceCallers.add(caller);

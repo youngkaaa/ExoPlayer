@@ -94,7 +94,7 @@ public interface ExtractorInput {
    *     the input was encountered having read no data.
    * @throws EOFException If the end of input was encountered having partially satisfied the read
    *     (i.e. having read at least one byte, but fewer than {@code length}), or if no bytes were
-   *     read and {@code allowEndOfInput} is false.
+   *     read andreadFully {@code allowEndOfInput} is false.
    * @throws IOException If an error occurs reading from the input.
    * @throws InterruptedException If the thread has been interrupted.
    */

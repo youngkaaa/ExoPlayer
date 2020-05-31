@@ -1032,8 +1032,8 @@ public final class Util {
    * performed are designed to minimize the probability of overflow.
    *
    * @param timestamp The timestamp to scale.
-   * @param multiplier The multiplier.
-   * @param divisor The divisor.
+   * @param multiplier The multiplier.  乘数
+   * @param divisor The divisor.  除数
    * @return The scaled timestamp.
    */
   public static long scaleLargeTimestamp(long timestamp, long multiplier, long divisor) {
@@ -1041,8 +1041,8 @@ public final class Util {
       long divisionFactor = divisor / multiplier;
       return timestamp / divisionFactor;
     } else if (divisor < multiplier && (multiplier % divisor) == 0) {
-      long multiplicationFactor = multiplier / divisor;
-      return timestamp * multiplicationFactor;
+      long multiplicationFactor = multiplier / divisor; // 先用乘数除以除数。 multiplier：1000_000,divisor=1000时
+      return timestamp * multiplicationFactor; // 再用timestamp乘以结果
     } else {
       double multiplicationFactor = (double) multiplier / divisor;
       return (long) (timestamp * multiplicationFactor);

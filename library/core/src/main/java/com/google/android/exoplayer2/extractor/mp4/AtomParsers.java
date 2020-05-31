@@ -41,7 +41,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-/** Utility methods for parsing MP4 format atom payloads according to ISO 14496-12. */
+/**
+ * Utility methods for parsing MP4 format atom payloads according to ISO 14496-12.
+ */
 @SuppressWarnings({"ConstantField"})
 /* package */ final class AtomParsers {
 
@@ -73,49 +75,62 @@ import java.util.List;
 
   /**
    * The threshold number of samples to trim from the start/end of an audio track when applying an
-   * edit below which gapless info can be used (rather than removing samples from the sample table).
+   * edit below which gapless info can be used (rather than removing samples from the sample
+   * table).
    */
   private static final int MAX_GAPLESS_TRIM_SIZE_SAMPLES = 4;
 
-  /** The magic signature for an Opus Identification header, as defined in RFC-7845. */
+  /**
+   * The magic signature for an Opus Identification header, as defined in RFC-7845.
+   */
   private static final byte[] opusMagic = Util.getUtf8Bytes("OpusHead");
 
   /**
    * Parses a trak atom (defined in 14496-12).
    *
-   * @param trak Atom to decode.
-   * @param mvhd Movie header atom, used to get the timescale.
-   * @param duration The duration in units of the timescale declared in the mvhd atom, or
-   *     {@link C#TIME_UNSET} if the duration should be parsed from the tkhd atom.
-   * @param drmInitData {@link DrmInitData} to be included in the format.
+   * @param trak            Atom to decode.
+   * @param mvhd            Movie header atom, used to get the timescale.
+   * @param duration        The duration in units of the timescale declared in the mvhd atom, or
+   *                        {@link C#TIME_UNSET} if the duration should be parsed from the tkhd
+   *                        atom.
+   * @param drmInitData     {@link DrmInitData} to be included in the format.
    * @param ignoreEditLists Whether to ignore any edit lists in the trak box.
-   * @param isQuickTime True for QuickTime media. False otherwise.
+   * @param isQuickTime     True for QuickTime media. False otherwise.
    * @return A {@link Track} instance, or {@code null} if the track's type isn't supported.
    */
   public static Track parseTrak(Atom.ContainerAtom trak, Atom.LeafAtom mvhd, long duration,
       DrmInitData drmInitData, boolean ignoreEditLists, boolean isQuickTime)
       throws ParserException {
+    // https://www.cnblogs.com/ranson7zop/p/7889272.html
+    // trak中的mdia box
     Atom.ContainerAtom mdia = trak.getContainerAtomOfType(Atom.TYPE_mdia);
+    // mdia 中的 hdlr。parseHdlr()是解析返回hdlr中的handler type。然后在getTrackTypeForHdlr中判断是视频轨还是音轨
     int trackType = getTrackTypeForHdlr(parseHdlr(mdia.getLeafAtomOfType(Atom.TYPE_hdlr).data));
     if (trackType == C.TRACK_TYPE_UNKNOWN) {
       return null;
     }
-
+    // trak中的tkhd box。主要是解析其中的trackid 时长 以及旋转角度(视频)
     TkhdData tkhdData = parseTkhd(trak.getLeafAtomOfType(Atom.TYPE_tkhd).data);
+    // 将从tkhd中读取到的长度赋值给duration
     if (duration == C.TIME_UNSET) {
       duration = tkhdData.duration;
     }
+    // time scale，4个字节。文件媒体在1秒时间内的刻度值，可以理解为1秒长度的时间单元数。类似于ffmpge中的time_base。比如movieTimescale=1000
     long movieTimescale = parseMvhd(mvhd.data);
-    long durationUs;
+    long durationUs; // 时长(微秒)
     if (duration == C.TIME_UNSET) {
       durationUs = C.TIME_UNSET;
     } else {
+      // duration是从tkhd中读取出来的该track的时长，但是其单位是基于movieTimescale的、
+      // 比如duration=47548，movieTimescale=1000，那么就是47548/1000 秒。
       durationUs = Util.scaleLargeTimestamp(duration, C.MICROS_PER_SECOND, movieTimescale);
     }
+    // stbl:Sample Table Box
     Atom.ContainerAtom stbl = mdia.getContainerAtomOfType(Atom.TYPE_minf)
         .getContainerAtomOfType(Atom.TYPE_stbl);
-
+    // Media Header Box  mdhd，拿到Pair(time_base,language_code)
     Pair<Long, String> mdhdData = parseMdhd(mdia.getLeafAtomOfType(Atom.TYPE_mdhd).data);
+    // 解析stsd信息。里面有轨道的信息。比如mime，视频宽高、声道数等
     StsdData stsdData = parseStsd(stbl.getLeafAtomOfType(Atom.TYPE_stsd).data, tkhdData.id,
         tkhdData.rotationDegrees, mdhdData.second, drmInitData, isQuickTime);
     long[] editListDurations = null;
@@ -125,6 +140,7 @@ import java.util.List;
       editListDurations = edtsData.first;
       editListMediaTimes = edtsData.second;
     }
+    // 该track解析完毕
     return stsdData.format == null ? null
         : new Track(tkhdData.id, trackType, mdhdData.first, movieTimescale, durationUs,
             stsdData.format, stsdData.requiredSampleTransformation, stsdData.trackEncryptionBoxes,
@@ -134,8 +150,8 @@ import java.util.List;
   /**
    * Parses an stbl atom (defined in 14496-12).
    *
-   * @param track Track to which this sample table corresponds.
-   * @param stblAtom stbl (sample table) atom to decode.
+   * @param track             Track to which this sample table corresponds.
+   * @param stblAtom          stbl (sample table) atom to decode.
    * @param gaplessInfoHolder Holder to populate with gapless playback information.
    * @return Sample table described by the stbl atom.
    * @throws ParserException Thrown if the stbl atom can't be parsed.
@@ -154,9 +170,9 @@ import java.util.List;
       }
       sampleSizeBox = new Stz2SampleSizeBox(stz2Atom);
     }
-
+    // https://blog.csdn.net/u013752202/article/details/80557459
     int sampleCount = sampleSizeBox.getSampleCount();
-    if (sampleCount == 0) {
+    if (sampleCount == 0) { // 如果采样数等于0
       return new TrackSampleTable(
           track,
           /* offsets= */ new long[0],
@@ -169,6 +185,7 @@ import java.util.List;
 
     // Entries are byte offsets of chunks.
     boolean chunkOffsetsAreLongs = false;
+    // 每个chunk相对于文件头的偏移box
     Atom.LeafAtom chunkOffsetsAtom = stblAtom.getLeafAtomOfType(Atom.TYPE_stco);
     if (chunkOffsetsAtom == null) {
       chunkOffsetsAreLongs = true;
@@ -190,8 +207,8 @@ import java.util.List;
     ChunkIterator chunkIterator = new ChunkIterator(stsc, chunkOffsets, chunkOffsetsAreLongs);
 
     // Prepare to read sample timestamps.
-    stts.setPosition(Atom.FULL_HEADER_SIZE);
-    int remainingTimestampDeltaChanges = stts.readUnsignedIntToInt() - 1;
+    stts.setPosition(Atom.FULL_HEADER_SIZE); // len(4)+type(4)+version(1)+flag(3)
+    int remainingTimestampDeltaChanges = stts.readUnsignedIntToInt() - 1; // time-to-sample的数目
     int remainingSamplesAtTimestampDelta = stts.readUnsignedIntToInt();
     int timestampDeltaInTimeUnits = stts.readUnsignedIntToInt();
 
@@ -503,7 +520,7 @@ import java.util.List;
   /**
    * Parses a udta atom.
    *
-   * @param udtaAtom The udta (user data) atom to decode.
+   * @param udtaAtom    The udta (user data) atom to decode.
    * @param isQuickTime True for QuickTime media. False otherwise.
    * @return Parsed metadata, or null.
    */
@@ -619,10 +636,17 @@ import java.util.List;
    * @return Timescale for the movie.
    */
   private static long parseMvhd(ParsableByteArray mvhd) {
+    // https://www.cnblogs.com/ranson7zop/p/7889272.html
+    // 还是先跳过前8个字节。len+type
     mvhd.setPosition(Atom.HEADER_SIZE);
+    // version(1)+flag(3)
     int fullAtom = mvhd.readInt();
+    // 拿第一个字节的值,也就是version
     int version = Atom.parseFullAtomVersion(fullAtom);
+    // version=0时跳过后面8个字节 create_time(4)+modification time(4)
     mvhd.skipBytes(version == 0 ? 8 : 16);
+    // time scale，4个字节。文件媒体在1秒时间内的刻度值，可以理解为1秒长度的时间单元数。类似于ffmpge中的time_base
+    // 只读到这里就行了，后面的不需要。
     return mvhd.readUnsignedInt();
   }
 
@@ -632,17 +656,24 @@ import java.util.List;
    * @return An object containing the parsed data.
    */
   private static TkhdData parseTkhd(ParsableByteArray tkhd) {
+    // https://www.cnblogs.com/ranson7zop/p/7889272.html 4.2.1
+    // 跳过tkhd的前8个字节 header
     tkhd.setPosition(Atom.HEADER_SIZE);
+    // version(1)+flag(3)
     int fullAtom = tkhd.readInt();
+    // 拿第一个字节的值
     int version = Atom.parseFullAtomVersion(fullAtom);
-
+    // version=0时跳过后面8个字节(创建时间4+修改时间4)
     tkhd.skipBytes(version == 0 ? 8 : 16);
+    // track id 4个字节
     int trackId = tkhd.readInt();
-
+    // reserved 保留位 4个字节
     tkhd.skipBytes(4);
     boolean durationUnknown = true;
     int durationPosition = tkhd.getPosition();
+    // version=0的，该track 的时长是4个字节
     int durationByteCount = version == 0 ? 4 : 8;
+    // 如果代表时长的这些字节[都是]-1，那么表示是无效的时长，那么durationUnknown=true。
     for (int i = 0; i < durationByteCount; i++) {
       if (tkhd.data[durationPosition + i] != -1) {
         durationUnknown = false;
@@ -650,19 +681,20 @@ import java.util.List;
       }
     }
     long duration;
-    if (durationUnknown) {
+    if (durationUnknown) { // 时长未知
       tkhd.skipBytes(durationByteCount);
       duration = C.TIME_UNSET;
     } else {
-      duration = version == 0 ? tkhd.readUnsignedInt() : tkhd.readUnsignedLongToLong();
-      if (duration == 0) {
+      duration = version == 0 ? tkhd.readUnsignedInt() : tkhd.readUnsignedLongToLong(); // 读取到时长
+      if (duration == 0) { // 时长未知
         // 0 duration normally indicates that the file is fully fragmented (i.e. all of the media
         // samples are in fragments). Treat as unknown.
         duration = C.TIME_UNSET;
       }
     }
-
+    // 保留位(8)+视频层layer(2)+track分组信息(2)+volume(2)+保留位(2)
     tkhd.skipBytes(16);
+    // 往下读取视频的matrix。也就是旋转信息
     int a00 = tkhd.readInt();
     int a01 = tkhd.readInt();
     tkhd.skipBytes(4);
@@ -671,7 +703,7 @@ import java.util.List;
 
     int rotationDegrees;
     int fixedOne = 65536;
-    if (a00 == 0 && a01 == fixedOne && a10 == -fixedOne && a11 == 0) {
+    if (a00 == 0 && a01 == fixedOne && a10 == -fixedOne && a11 == 0) { // 判断旋转角度
       rotationDegrees = 90;
     } else if (a00 == 0 && a01 == -fixedOne && a10 == fixedOne && a11 == 0) {
       rotationDegrees = 270;
@@ -681,7 +713,7 @@ import java.util.List;
       // Only 0, 90, 180 and 270 are supported. Treat anything else as 0.
       rotationDegrees = 0;
     }
-
+    // 将trackId、duration以及rotationDegrees返回出去
     return new TkhdData(trackId, duration, rotationDegrees);
   }
 
@@ -692,11 +724,20 @@ import java.util.List;
    * @return The handler value.
    */
   private static int parseHdlr(ParsableByteArray hdlr) {
+    // 注意这里是FULL_HEADER_SIZE 12个字节
+    // hdlr： size(4)+type(4)+1(version)+3(flag)+pre-defined(4)+handler type(4)
+    // 所以这里返回的就是handler type。
+    // 在media box中，该值为4个字符：
+    // “vide”— video track
+    // “soun”— audio track
+    // “hint”— hint track
     hdlr.setPosition(Atom.FULL_HEADER_SIZE + 4);
     return hdlr.readInt();
   }
 
-  /** Returns the track type for a given handler value. */
+  /**
+   * Returns the track type for a given handler value.
+   */
   private static int getTrackTypeForHdlr(int hdlr) {
     if (hdlr == TYPE_soun) {
       return C.TRACK_TYPE_AUDIO;
@@ -719,12 +760,20 @@ import java.util.List;
    * in one second, and the language code.
    */
   private static Pair<Long, String> parseMdhd(ParsableByteArray mdhd) {
+    // https://www.cnblogs.com/ranson7zop/p/7889272.html 4.2.1
+    // 同样的先跳过前8个字节
     mdhd.setPosition(Atom.HEADER_SIZE);
+    // version(1)+flag(3)
     int fullAtom = mdhd.readInt();
+    // 拿到第一个字节的version
     int version = Atom.parseFullAtomVersion(fullAtom);
+    // version=0时跳过后面8个字节(创建时间4+修改时间4)
     mdhd.skipBytes(version == 0 ? 8 : 16);
+    // time scale，4个字节。文件媒体在1秒时间内的刻度值，可以理解为1秒长度的时间单元数。类似于ffmpge中的time_base
     long timescale = mdhd.readUnsignedInt();
+    // track duration，前面已经拿到过了，所以这里跳过
     mdhd.skipBytes(version == 0 ? 4 : 8);
+    // language，媒体语言码。最高位为0，后面15位为3个字符（见ISO 639-2/T标准中定义）
     int languageCode = mdhd.readUnsignedShort();
     String language =
         ""
@@ -737,25 +786,31 @@ import java.util.List;
   /**
    * Parses a stsd atom (defined in 14496-12).
    *
-   * @param stsd The stsd atom to decode.
-   * @param trackId The track's identifier in its container.
+   * @param stsd            The stsd atom to decode.
+   * @param trackId         The track's identifier in its container.
    * @param rotationDegrees The rotation of the track in degrees.
-   * @param language The language of the track.
-   * @param drmInitData {@link DrmInitData} to be included in the format.
-   * @param isQuickTime True for QuickTime media. False otherwise.
+   * @param language        The language of the track.
+   * @param drmInitData     {@link DrmInitData} to be included in the format.
+   * @param isQuickTime     True for QuickTime media. False otherwise.
    * @return An object containing the parsed data.
    */
   private static StsdData parseStsd(ParsableByteArray stsd, int trackId, int rotationDegrees,
       String language, DrmInitData drmInitData, boolean isQuickTime) throws ParserException {
+    // size(4)+type(4)+1(version)+3(flag)
+    // https://blog.csdn.net/u013752202/article/details/80557459
     stsd.setPosition(Atom.FULL_HEADER_SIZE);
+    // entry count 条目数量
     int numberOfEntries = stsd.readInt();
     StsdData out = new StsdData(numberOfEntries);
+    // 遍历每个entry
     for (int i = 0; i < numberOfEntries; i++) {
+      // 该entry在stsd data数据中此时的开始位置，比如第一个entry的开始位置就是12+4=16
       int childStartPosition = stsd.getPosition();
-      int childAtomSize = stsd.readInt();
+      int childAtomSize = stsd.readInt(); // 该entry的size
       Assertions.checkArgument(childAtomSize > 0, "childAtomSize should be positive");
+      // 该entry的type，avc1等。
       int childAtomType = stsd.readInt();
-      if (childAtomType == Atom.TYPE_avc1
+      if (childAtomType == Atom.TYPE_avc1  // 视频类型的
           || childAtomType == Atom.TYPE_avc3
           || childAtomType == Atom.TYPE_encv
           || childAtomType == Atom.TYPE_mp4v
@@ -802,7 +857,7 @@ import java.util.List;
         out.format = Format.createSampleFormat(Integer.toString(trackId),
             MimeTypes.APPLICATION_CAMERA_MOTION, null, Format.NO_VALUE, null);
       }
-      stsd.setPosition(childStartPosition + childAtomSize);
+      stsd.setPosition(childStartPosition + childAtomSize); // 解析完该stsd了
     }
     return out;
   }
@@ -852,16 +907,20 @@ import java.util.List;
             initializationData);
   }
 
+
   private static void parseVideoSampleEntry(ParsableByteArray parent, int atomType, int position,
       int size, int trackId, int rotationDegrees, DrmInitData drmInitData, StsdData out,
       int entryIndex) throws ParserException {
+    // position基础上跳过。position是外面for循环刚进入时保存的。
+    // 然后读取了childAtomSize(4)和childAtomType(4)，然后加上保留位(6)+数据引用索引(2)
     parent.setPosition(position + Atom.HEADER_SIZE + StsdData.STSD_HEADER_SIZE);
-
+    // 16byte:pre_defined(2)+reserved(2)+pre_defined(4)+pre_defined(4)+pre_defined(4)
     parent.skipBytes(16);
-    int width = parent.readUnsignedShort();
-    int height = parent.readUnsignedShort();
-    boolean pixelWidthHeightRatioFromPasp = false;
+    int width = parent.readUnsignedShort(); // 2个字节的宽度  比如1920
+    int height = parent.readUnsignedShort(); // 2个字节的高度  比如1080
+    boolean pixelWidthHeightRatioFromPasp = false; // 从pasp box中读取出了宽高比例时，设置为true
     float pixelWidthHeightRatio = 1;
+    // horiz_res(4)+vert_res(4)+reserved(4)+frames_count(2)+compressr_name(32)+bit_depth(2)+pre_defined(2)
     parent.skipBytes(50);
 
     int childPosition = parent.getPosition();
@@ -890,17 +949,18 @@ import java.util.List;
     while (childPosition - position < size) {
       parent.setPosition(childPosition);
       int childStartPosition = parent.getPosition();
-      int childAtomSize = parent.readInt();
+      int childAtomSize = parent.readInt(); // 该子box的大小
       if (childAtomSize == 0 && parent.getPosition() - position == size) {
         // Handle optional terminating four zero bytes in MOV files.
         break;
       }
       Assertions.checkArgument(childAtomSize > 0, "childAtomSize should be positive");
-      int childAtomType = parent.readInt();
+      int childAtomType = parent.readInt(); // box name
       if (childAtomType == Atom.TYPE_avcC) {
         Assertions.checkState(mimeType == null);
         mimeType = MimeTypes.VIDEO_H264;
         parent.setPosition(childStartPosition + Atom.HEADER_SIZE);
+        // 解析出宽高、以及像素比例等
         AvcConfig avcConfig = AvcConfig.parse(parent);
         initializationData = avcConfig.initializationData;
         out.nalUnitLengthFieldLength = avcConfig.nalUnitLengthFieldLength;
@@ -935,7 +995,7 @@ import java.util.List;
             parseEsdsFromParent(parent, childStartPosition);
         mimeType = mimeTypeAndInitializationData.first;
         initializationData = Collections.singletonList(mimeTypeAndInitializationData.second);
-      } else if (childAtomType == Atom.TYPE_pasp) {
+      } else if (childAtomType == Atom.TYPE_pasp) { // pasp类型的
         pixelWidthHeightRatio = parsePaspFromParent(parent, childStartPosition);
         pixelWidthHeightRatioFromPasp = true;
       } else if (childAtomType == Atom.TYPE_sv3d) {
@@ -963,7 +1023,7 @@ import java.util.List;
           }
         }
       }
-      childPosition += childAtomSize;
+      childPosition += childAtomSize; // 处理完该子box了，自增然后处理下一个
     }
 
     // If the media type was not recognized, ignore the track.
@@ -971,7 +1031,7 @@ import java.util.List;
       return;
     }
 
-    out.format =
+    out.format = // 将读取到的值存储到Format中
         Format.createVideoSampleFormat(
             Integer.toString(trackId),
             mimeType,
@@ -995,38 +1055,44 @@ import java.util.List;
    *
    * @param edtsAtom edts (edit box) atom to decode.
    * @return Pair of edit list durations and edit list media times, or a pair of nulls if they are
-   *     not present.
+   * not present.
    */
   private static Pair<long[], long[]> parseEdts(Atom.ContainerAtom edtsAtom) {
     Atom.LeafAtom elst;
+    // 拿到里面的elst。没有的话返回null
     if (edtsAtom == null || (elst = edtsAtom.getLeafAtomOfType(Atom.TYPE_elst)) == null) {
       return Pair.create(null, null);
     }
     ParsableByteArray elstData = elst.data;
+    // 跳过elst前8字节  len(4)+type(4)
     elstData.setPosition(Atom.HEADER_SIZE);
+    // version(1)+flag(3)
     int fullAtom = elstData.readInt();
     int version = Atom.parseFullAtomVersion(fullAtom);
+    // 后面的elst表中的条目数目
     int entryCount = elstData.readUnsignedIntToInt();
     long[] editListDurations = new long[entryCount];
     long[] editListMediaTimes = new long[entryCount];
     for (int i = 0; i < entryCount; i++) {
+      // Track duration
       editListDurations[i] =
           version == 1 ? elstData.readUnsignedLongToLong() : elstData.readUnsignedInt();
+      // starting time within the media of this edit segment (in media timescale units)
       editListMediaTimes[i] = version == 1 ? elstData.readLong() : elstData.readInt();
-      int mediaRateInteger = elstData.readShort();
+      int mediaRateInteger = elstData.readShort(); // relative rate
       if (mediaRateInteger != 1) {
         // The extractor does not handle dwell edits (mediaRateInteger == 0).
         throw new IllegalArgumentException("Unsupported media rate.");
       }
-      elstData.skipBytes(2);
+      elstData.skipBytes(2); // 只用前两个字节。后两个跳过
     }
     return Pair.create(editListDurations, editListMediaTimes);
   }
 
   private static float parsePaspFromParent(ParsableByteArray parent, int position) {
     parent.setPosition(position + Atom.HEADER_SIZE);
-    int hSpacing = parent.readUnsignedIntToInt();
-    int vSpacing = parent.readUnsignedIntToInt();
+    int hSpacing = parent.readUnsignedIntToInt(); // 取值比如：1
+    int vSpacing = parent.readUnsignedIntToInt(); // 取值比如：1
     return (float) hSpacing / vSpacing;
   }
 
@@ -1291,7 +1357,8 @@ import java.util.List;
     return null;
   }
 
-  /* package */ static Pair<Integer, TrackEncryptionBox> parseCommonEncryptionSinfFromParent(
+  /* package */
+  static Pair<Integer, TrackEncryptionBox> parseCommonEncryptionSinfFromParent(
       ParsableByteArray parent, int position, int size) {
     int childPosition = position + Atom.HEADER_SIZE;
     int schemeInformationBoxPosition = C.POSITION_UNSET;
@@ -1397,7 +1464,9 @@ import java.util.List;
     return size;
   }
 
-  /** Returns whether it's possible to apply the specified edit using gapless playback info. */
+  /**
+   * Returns whether it's possible to apply the specified edit using gapless playback info.
+   */
   private static boolean canApplyEditWithGaplessInfo(
       long[] timestamps, long duration, long editStartTime, long editEndTime) {
     int lastIndex = timestamps.length - 1;
@@ -1464,9 +1533,9 @@ import java.util.List;
    */
   private static final class TkhdData {
 
-    private final int id;
-    private final long duration;
-    private final int rotationDegrees;
+    private final int id; // track id
+    private final long duration; // 时长
+    private final int rotationDegrees; // 旋转角度
 
     public TkhdData(int id, long duration, int rotationDegrees) {
       this.id = id;
@@ -1530,9 +1599,10 @@ import java.util.List;
 
     public StszSampleSizeBox(Atom.LeafAtom stszAtom) {
       data = stszAtom.data;
-      data.setPosition(Atom.FULL_HEADER_SIZE);
+      data.setPosition(Atom.FULL_HEADER_SIZE); // len(4)+type(4)+version(1)+flag(3)
+      // 全部sample的数目。如果所有的sample有相同的长度，这个字段就是这个值。否则，这个字段的值就是0。那些长度存在sample size表中
       fixedSampleSize = data.readUnsignedIntToInt();
-      sampleCount = data.readUnsignedIntToInt();
+      sampleCount = data.readUnsignedIntToInt(); // sample 数目
     }
 
     @Override

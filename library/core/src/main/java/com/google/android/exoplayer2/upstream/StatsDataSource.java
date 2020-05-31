@@ -80,7 +80,7 @@ public final class StatsDataSource implements DataSource {
     // Reassign defaults in case dataSource.open throws an exception.
     lastOpenedUri = dataSpec.uri;
     lastResponseHeaders = Collections.emptyMap();
-    long availableBytes = dataSource.open(dataSpec);
+    long availableBytes = dataSource.open(dataSpec); // http请求拿到content-length
     lastOpenedUri = Assertions.checkNotNull(getUri());
     lastResponseHeaders = getResponseHeaders();
     return availableBytes;
